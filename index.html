@@ -2183,6 +2183,7 @@
         try {
             firebase.initializeApp(firebaseConfig);
             db = firebase.firestore();
+            firebaseOK = true;
             window.firebaseOK = true; // <--- Asegúrate de que esta línea exista
             console.log("✅ Firebase y Auth listos");
         } catch(e) {
