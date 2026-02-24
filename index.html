@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Registro de Ventas - Tecnología (Integrado)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div id="login-screen" class="login-container">
+        <div class="login-box">
+            <h1>🔐 Iniciar Sesión</h1>
+            <p>Sistema de Registro de Ventas</p>
+            <button onclick="Auth.loginConGoogle()" style="background:#4285F4;color:white;border:none;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:10px;">
+                <img src="https://cdn-icons-png.flaticon.com/512/2991/2991148.png" width="18"> Ingresar con Google
+            </button>
+            <div style="text-align:center;margin-bottom:20px;color:#999;font-size:12px;">— O USA TU CUENTA LOCAL —</div>
+            <div id="error-login" class="error-message">Usuario o contraseña incorrectos</div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group"><label for="username">Usuario</label><input type="text" id="username" placeholder="Tu correo o usuario"></div>
+                <div class="form-group"><label for="password">Contraseña</label><input type="password" id="password"></div>
+                <button type="submit">🚀 Ingresar</button>
+            </form>
+            <button onclick="Auth.entrarComoInvitado()" style="background:transparent;color:#666;border:1px solid #ddd;margin-top:15px;font-size:13px;">👤 Probar como Invitado (Modo local)</button>
+        </div>
+    </div>
+    <div id="pending-screen" class="login-container hidden">
+        <div class="login-box" style="max-width:480px;text-align:center;">
+            <div style="font-size:4em;margin-bottom:15px;">⏳</div>
+            <h1 style="color:#fd7e14;font-size:1.6em;margin-bottom:10px;">Acceso Pendiente</h1>
+            <p style="color:#555;margin-bottom:20px;">Tu cuenta está esperando aprobación del administrador.</p>
+            <div id="pending-user-info" style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:15px;margin-bottom:20px;font-size:0.9em;color:#856404;"></div>
+            <button onclick="Auth.cerrarSesion()" style="background:linear-gradient(135deg,#6c757d,#495057);width:100%;">🚪 Cerrar Sesión</button>
+        </div>
+    </div>
+    <div id="denied-screen" class="login-container hidden">
+        <div class="login-box" style="max-width:480px;text-align:center;">
+            <div style="font-size:4em;margin-bottom:15px;">🚫</div>
+            <h1 style="color:#dc3545;font-size:1.6em;margin-bottom:10px;">Acceso Denegado</h1>
+            <p style="color:#555;margin-bottom:20px;">Tu solicitud de acceso fue rechazada por el administrador.</p>
+            <div id="denied-user-info" style="background:#f8d7da;border:1px solid #f5c2c7;border-radius:10px;padding:15px;margin-bottom:20px;font-size:0.9em;color:#721c24;"></div>
+            <button onclick="Auth.cerrarSesion()" style="background:linear-gradient(135deg,#dc3545,#c82333);width:100%;">🚪 Cerrar Sesión</button>
+        </div>
+    </div>
+    <div id="main-screen" class="hidden">
+        <div class="container">
+            <header>
+                <button class="menu-toggle-btn" onclick="SidebarMenu.toggle()" title="Menú">☰</button>
+                <h1>📊 Sistema de Registro de Ventas</h1>
+                <p>Gestión de Tecnología</p>
+                <button class="logout-btn" onclick="Auth.cerrarSesion()">🚪 Cerrar Sesión</button>
+                <button id="theme-toggle-btn" onclick="ThemeManager.toggle()" title="Cambiar modo">
+                    <span id="theme-icon">🌙</span>
+                    <span id="theme-label">Modo Oscuro</span>
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                </button>
+                <div id="firebase-sync-indicator" style="display:none;position:absolute;bottom:10px;right:20px;background:rgba(255,255,255,0.2);color:white;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;align-items:center;gap:6px;">
+                    <span style="display:inline-block;width:8px;height:8px;background:#7df;border-radius:50%;animation:pulse 1s infinite;"></span>
+                    Sincronizando...
+                </div>
+            </header>
+
+            <div class="menu-overlay" id="menuOverlay" onclick="SidebarMenu.close()"></div>
+            <nav class="sidebar-menu" id="sidebarMenu">
+                <div class="sidebar-header">
+                    <span>📊 Menú Principal</span>
+                    <button class="sidebar-close-btn" onclick="SidebarMenu.close()">✕</button>
+                </div>
+                <div class="sidebar-nav">
+                    <button class="sidebar-item active" id="sidebarTab-registro" onclick="SidebarMenu.selectTab('registro')"><span class="item-left"><span class="item-icon">📝</span> Registro</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-historial" onclick="SidebarMenu.selectTab('historial')"><span class="item-left"><span class="item-icon">📋</span> Historial</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-cuentas-cobrar" onclick="SidebarMenu.selectTab('cuentas-cobrar')"><span class="item-left"><span class="item-icon">💰</span> Cuentas por Cobrar</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-clientes" onclick="SidebarMenu.selectTab('clientes')"><span class="item-left"><span class="item-icon">👥</span> Clientes</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-reportes" onclick="SidebarMenu.selectTab('reportes')"><span class="item-left"><span class="item-icon">📊</span> Reportes</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-gastos" onclick="SidebarMenu.selectTab('gastos')"><span class="item-left"><span class="item-icon">💸</span> Gastos</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-rentabilidad" onclick="SidebarMenu.selectTab('rentabilidad')"><span class="item-left"><span class="item-icon">📈</span> Rentabilidad</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-resumen" onclick="SidebarMenu.selectTab('resumen')"><span class="item-left"><span class="item-icon">📊</span> Resumen</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-inventario" onclick="SidebarMenu.selectTab('inventario')"><span class="item-left"><span class="item-icon">📦</span> Inventario</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-ordenes-servicio" onclick="SidebarMenu.selectTab('ordenes-servicio')"><span class="item-left"><span class="item-icon">🔧</span> Órdenes de Servicio</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-proveedores" onclick="SidebarMenu.selectTab('proveedores')"><span class="item-left"><span class="item-icon">🏭</span> Proveedores</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-compras" onclick="SidebarMenu.selectTab('compras')"><span class="item-left"><span class="item-icon">🛒</span> Compras</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-devoluciones" onclick="SidebarMenu.selectTab('devoluciones')"><span class="item-left"><span class="item-icon">↩️</span> Devoluciones</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-cotizaciones" onclick="SidebarMenu.selectTab('cotizaciones')"><span class="item-left"><span class="item-icon">📄</span> Cotizaciones</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item" id="sidebarTab-cierre-caja" onclick="SidebarMenu.selectTab('cierre-caja')"><span class="item-left"><span class="item-icon">🏧</span> Cierre de Caja</span><span class="arrow">›</span></button>
+                    <button class="sidebar-item solo-admin" id="sidebarTab-usuarios" onclick="SidebarMenu.selectTab('usuarios')"><span class="item-left"><span class="item-icon">👨‍💼</span> Gestión de Usuarios</span><span class="arrow">›</span></button>
+                </div>
+            </nav>
+
+            <div class="tab-indicator-bar">
+                <span class="tab-breadcrumb">Sección actual: <span id="currentTabName">Registro</span></span>
+                <button class="open-menu-link" onclick="SidebarMenu.open()">☰ Cambiar sección</button>
+            </div>
+            <!-- TAB: REGISTRO -->
+            <div id="registro" class="tab-content active">
+                <div class="success-msg" id="success-msg">✅ Venta registrada correctamente</div>
+                <form id="ventaForm">
+                    <div class="form-row">
+                        <div class="form-group"><label for="fecha">Fecha *</label><input type="date" id="fecha" required></div>
+                        <div class="form-group"><label for="categoria">Categoría *</label>
+                            <select id="categoria" required><option value="">Seleccionar...</option><option>Laptops</option><option>Desktops</option><option>Accesorios</option><option>Periféricos</option><option>Componentes</option><option>Servicios</option><option>Otros</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="sku">SKU (Código de Producto)</label>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <input type="text" id="sku" placeholder="Ej: SAMSUNG-LAPTOP-512GB-NEGRO" style="text-transform:uppercase;flex:1;">
+                            <button type="button" onclick="SkuGen.togglePanel()" style="white-space:nowrap;padding:10px 16px;font-size:13px;background:linear-gradient(135deg,#7C3AED,#5B21B6);box-shadow:0 4px 12px rgba(124,58,237,0.3);">🏷️ Generar SKU</button>
+                        </div>
+                        <small>Escribe un SKU o usa el generador para crearlo automáticamente.</small>
+                        <!-- PANEL INLINE GENERADOR DE SKU -->
+                        <div id="sku-inline-panel" style="display:none;margin-top:14px;padding:20px;border:2px solid #7C3AED;border-radius:12px;background:var(--bg-surface);position:relative;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                                <strong style="color:#7C3AED;font-size:14px;">🏷️ Generador de SKU</strong>
+                                <div id="sku-inline-output" style="font-size:1.1em;font-weight:800;color:#7C3AED;font-family:'Poppins',sans-serif;letter-spacing:0.04em;flex:1;text-align:center;padding:0 10px;word-break:break-all;">—</div>
+                                <div style="display:flex;gap:8px;">
+                                    <button type="button" onclick="SkuGen.aplicarARegistro()" style="padding:8px 16px;font-size:13px;background:linear-gradient(135deg,#7C3AED,#5B21B6);">✅ Aplicar</button>
+                                    <button type="button" onclick="SkuGen.limpiarPanel()" class="btn-secondary" style="padding:8px 12px;font-size:13px;">🔄</button>
+                                </div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                                <div class="sku-field-wrap"><label>🏢 Marca</label><input type="text" id="skup-marca" placeholder="SAMSUNG" oninput="SkuGen.onPanelInput(this,'marca')" onkeydown="SkuGen.onKey(event,'marca',true)" onfocus="SkuGen.showSuggestions('marca',true)" onblur="SkuGen.hideSuggestions('marca',true)"><div class="sku-suggestions" id="sugp-marca"></div></div>
+                                <div class="sku-field-wrap"><label>📦 Producto</label><input type="text" id="skup-producto" placeholder="LAPTOP" oninput="SkuGen.onPanelInput(this,'producto')" onkeydown="SkuGen.onKey(event,'producto',true)" onfocus="SkuGen.showSuggestions('producto',true)" onblur="SkuGen.hideSuggestions('producto',true)"><div class="sku-suggestions" id="sugp-producto"></div></div>
+                                <div class="sku-field-wrap"><label>📐 Unidad</label><input type="text" id="skup-unidad" placeholder="UNIDAD" oninput="SkuGen.onPanelInput(this,'unidad')" onkeydown="SkuGen.onKey(event,'unidad',true)" onfocus="SkuGen.showSuggestions('unidad',true)" onblur="SkuGen.hideSuggestions('unidad',true)"><div class="sku-suggestions" id="sugp-unidad"></div></div>
+                                <div class="sku-field-wrap"><label>🎨 Color</label><input type="text" id="skup-color" placeholder="NEGRO" oninput="SkuGen.onPanelInput(this,'color')" onkeydown="SkuGen.onKey(event,'color',true)" onfocus="SkuGen.showSuggestions('color',true)" onblur="SkuGen.hideSuggestions('color',true)"><div class="sku-suggestions" id="sugp-color"></div></div>
+                                <div class="sku-field-wrap"><label>🔌 Tipo</label><input type="text" id="skup-tipo" placeholder="INALAMBRICO" oninput="SkuGen.onPanelInput(this,'tipo')" onkeydown="SkuGen.onKey(event,'tipo',true)" onfocus="SkuGen.showSuggestions('tipo',true)" onblur="SkuGen.hideSuggestions('tipo',true)"><div class="sku-suggestions" id="sugp-tipo"></div></div>
+                                <div class="sku-field-wrap"><label>🔢 Modelo</label><input type="text" id="skup-modelo" placeholder="PRO" oninput="SkuGen.onPanelInput(this,'modelo')" onkeydown="SkuGen.onKey(event,'modelo',true)" onfocus="SkuGen.showSuggestions('modelo',true)" onblur="SkuGen.hideSuggestions('modelo',true)"><div class="sku-suggestions" id="sugp-modelo"></div></div>
+                                <div class="sku-field-wrap"><label>⚡ Voltaje/Watts</label><input type="text" id="skup-voltaje" placeholder="65W" oninput="SkuGen.onPanelInput(this,'voltaje')" onkeydown="SkuGen.onKey(event,'voltaje',true)" onfocus="SkuGen.showSuggestions('voltaje',true)" onblur="SkuGen.hideSuggestions('voltaje',true)"><div class="sku-suggestions" id="sugp-voltaje"></div></div>
+                                <div class="sku-field-wrap"><label>💾 Capacidad</label><input type="text" id="skup-capacidad" placeholder="512GB" oninput="SkuGen.onPanelInput(this,'capacidad')" onkeydown="SkuGen.onKey(event,'capacidad',true)" onfocus="SkuGen.showSuggestions('capacidad',true)" onblur="SkuGen.hideSuggestions('capacidad',true)"><div class="sku-suggestions" id="sugp-capacidad"></div></div>
+                                <div class="sku-field-wrap"><label>🔗 USB</label><input type="text" id="skup-usb" placeholder="USB 3.0" oninput="SkuGen.onPanelInput(this,'usb')" onkeydown="SkuGen.onKey(event,'usb',true)" onfocus="SkuGen.showSuggestions('usb',true)" onblur="SkuGen.hideSuggestions('usb',true)"><div class="sku-suggestions" id="sugp-usb"></div></div>
+                                <div class="sku-field-wrap"><label>➕ Extra</label><input type="text" id="skup-extra" placeholder="4K, DDR5..." oninput="SkuGen.onPanelInput(this,'extra')" onkeydown="SkuGen.onKey(event,'extra',true)" onfocus="SkuGen.showSuggestions('extra',true)" onblur="SkuGen.hideSuggestions('extra',true)"><div class="sku-suggestions" id="sugp-extra"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group"><label for="producto">Nombre del Producto *</label><input type="text" id="producto" placeholder="Ej: Laptop HP Pavilion" required autocomplete="off"></div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="cantidad">Cantidad *</label><input type="number" id="cantidad" min="1" value="1" required></div>
+                        <div class="form-group"><label for="precio">Precio Unitario (S/) *</label><input type="number" id="precio" step="0.01" min="0" placeholder="0.00" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="total-display">Total a Pagar</label><input type="text" id="total-display" readonly style="background:#f0f0f0;font-weight:bold;font-size:1.1em;color:#4472C4;"></div>
+                        <div class="form-group"><label for="adelanto">Adelanto (S/)</label><input type="number" id="adelanto" step="0.01" min="0" placeholder="0.00" value="0"><small>Monto pagado inicialmente.</small></div>
+                    </div>
+                    <div class="form-group">
+                        <div id="saldo-pendiente-display" style="background:#fff3cd;padding:15px;border-radius:8px;border:2px solid #ffc107;display:none;margin-top:10px;">
+                            <strong style="color:#856404;">Saldo Pendiente: <span id="saldo-valor">S/0.00</span></strong>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="cliente">Cliente</label><input type="text" id="cliente" placeholder="Nombre del cliente" autocomplete="off"></div>
+                        <div class="form-group"><label for="metodo">Método de Pago</label>
+                            <select id="metodo"><option value="">Seleccionar...</option><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Plin</option><option>Yape</option><option>Otro</option></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label for="vendedor">Vendedor</label><input type="text" id="vendedor" placeholder="Nombre del vendedor"></div>
+                        <div class="form-group"><label for="notas">Notas</label><input type="text" id="notas" placeholder="Información adicional"></div>
+                    </div>
+                    <div style="margin-top:30px;">
+                        <button type="submit">💾 Guardar Venta</button>
+                        <button type="button" class="btn-secondary" onclick="Ventas.limpiarFormulario()">🔄 Limpiar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- TAB: HISTORIAL -->
+            <div id="historial" class="tab-content">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+                    <h2 style="color:#333;">Historial de Ventas</h2>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <button onclick="Exportar.exportarExcel()">📥 Exportar a Excel</button>
+                        <button onclick="Exportar.guardarJSON()" class="btn-secondary">💾 Guardar Datos</button>
+                        <button onclick="document.getElementById('fileInput').click()" class="btn-secondary">📂 Cargar Datos</button>
+                        <input type="file" id="fileInput" accept=".json" style="display:none;" onchange="Exportar.cargarJSON(event)">
+                    </div>
+                </div>
+                <div class="search-filter-container">
+                    <div class="search-box"><span class="search-icon">🔍</span><input type="text" id="busqueda" placeholder="Buscar por producto, cliente o SKU..." oninput="Filtros.aplicarFiltros()"></div>
+                    <div class="filter-row">
+                        <div class="form-group"><label>Desde</label><input type="date" id="filtro-fecha-desde" onchange="Filtros.aplicarFiltros()"></div>
+                        <div class="form-group"><label>Hasta</label><input type="date" id="filtro-fecha-hasta" onchange="Filtros.aplicarFiltros()"></div>
+                        <div class="form-group"><label>Categoría</label><select id="filtro-categoria" onchange="Filtros.aplicarFiltros()"><option value="">Todas</option><option>Laptops</option><option>Desktops</option><option>Accesorios</option><option>Periféricos</option><option>Componentes</option><option>Servicios</option><option>Otros</option></select></div>
+                        <div class="form-group"><label>Método de Pago</label><select id="filtro-metodo" onchange="Filtros.aplicarFiltros()"><option value="">Todos</option><option>Efectivo</option><option>Tarjeta</option><option>Plin</option><option>Yape</option><option>Transferencia</option></select></div>
+                        <div class="form-group"><label>Estado de Pago</label><select id="filtro-estado" onchange="Filtros.aplicarFiltros()"><option value="">Todos</option><option>Pagado</option><option>Pendiente</option></select></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                        <span class="results-counter" id="contador-resultados">0 resultados</span>
+                        <button class="btn-secondary" onclick="Filtros.limpiarFiltros()">🔄 Limpiar Filtros</button>
+                    </div>
+                </div>
+                <div id="tabla-ventas"></div>
+            </div>
+
+            <!-- TAB: CUENTAS POR COBRAR -->
+            <div id="cuentas-cobrar" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">💰 Cuentas por Cobrar</h2>
+                <div class="summary-cards" id="cuentas-por-cobrar-cards"></div>
+                <div style="margin-bottom:15px;display:flex;gap:10px;flex-wrap:wrap;">
+                    <span style="font-weight:600;">Ordenar por:</span>
+                    <button class="small-btn" onclick="CuentasCobrar.ordenarPor('monto')">💵 Monto</button>
+                    <button class="small-btn" onclick="CuentasCobrar.ordenarPor('fecha')">📅 Fecha</button>
+                    <button class="small-btn" onclick="CuentasCobrar.ordenarPor('cliente')">👤 Cliente</button>
+                    <button class="small-btn" onclick="CuentasCobrar.ordenarPor('dias')">⏰ Días</button>
+                </div>
+                <div id="tabla-cuentas-cobrar"></div>
+            </div>
+
+            <!-- TAB: CLIENTES -->
+            <div id="clientes" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">👥 Gestión de Clientes</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="Clientes.mostrarFormNuevoCliente()">➕ Nuevo Cliente</button>
+                    <button class="btn-secondary" onclick="Clientes.exportarClientes()">📥 Exportar Excel</button>
+                </div>
+                <div id="form-nuevo-cliente" class="hidden" style="margin-bottom:20px;padding:20px;border:2px solid #4472C4;border-radius:10px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:15px;color:#4472C4;">Registrar Nuevo Cliente</h3>
+                    <div class="form-row">
+                        <div class="form-group"><label>Nombre *</label><input id="nuevo-cliente-nombre" type="text" placeholder="Nombre completo"></div>
+                        <div class="form-group"><label>Teléfono</label><input id="nuevo-cliente-telefono" type="tel" placeholder="987654321"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Email</label><input id="nuevo-cliente-email" type="email" placeholder="cliente@email.com"></div>
+                        <div class="form-group"><label>Dirección</label><input id="nuevo-cliente-direccion" type="text" placeholder="Calle, Número, Distrito"></div>
+                    </div>
+                    <div class="form-group"><label>Notas</label><textarea id="nuevo-cliente-notas" placeholder="Información adicional del cliente"></textarea></div>
+                    <div style="margin-top:15px;">
+                        <button onclick="Clientes.guardarNuevoCliente()">💾 Guardar Cliente</button>
+                        <button class="btn-secondary" onclick="Clientes.cancelarNuevoCliente()">Cancelar</button>
+                    </div>
+                </div>
+                <div class="search-box" style="margin-bottom:20px;"><span class="search-icon">🔍</span><input type="text" id="busqueda-clientes" placeholder="Buscar clientes..." oninput="Clientes.buscarClientes()"></div>
+                <div id="lista-clientes"></div>
+            </div>
+
+            <!-- TAB: REPORTES -->
+            <div id="reportes" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">📊 Reportes y Análisis</h2>
+                <div class="reporte-container">
+                    <div class="date-range-selector">
+                        <div class="preset-buttons">
+                            <button class="preset-btn active" onclick="Reportes.seleccionarPreset('hoy',event)">Hoy</button>
+                            <button class="preset-btn" onclick="Reportes.seleccionarPreset('semana',event)">Esta Semana</button>
+                            <button class="preset-btn" onclick="Reportes.seleccionarPreset('mes',event)">Este Mes</button>
+                            <button class="preset-btn" onclick="Reportes.seleccionarPreset('ultimo-mes',event)">Último Mes</button>
+                            <button class="preset-btn" onclick="Reportes.seleccionarPreset('personalizado',event)">Personalizado</button>
+                        </div>
+                        <div style="display:flex;gap:10px;" id="fechas-personalizadas" class="hidden">
+                            <input type="date" id="reporte-fecha-desde" onchange="Reportes.generarReporte()">
+                            <input type="date" id="reporte-fecha-hasta" onchange="Reportes.generarReporte()">
+                        </div>
+                        <button onclick="Reportes.exportarPDF()" style="background:#dc3545;">📄 PDF</button>
+                        <button onclick="Reportes.exportarExcel()">📥 Excel</button>
+                    </div>
+                    <div id="comparacion-periodo"></div>
+                    <div id="metricas-reporte"></div>
+                </div>
+                <div class="grafico-grid">
+                    <div class="grafico-container"><div class="grafico-titulo">📈 Evolución de Ventas</div><div class="grafico-wrapper"><canvas id="grafico-linea"></canvas></div></div>
+                    <div class="grafico-container"><div class="grafico-titulo">🎯 Distribución por Categoría</div><div class="grafico-wrapper"><canvas id="grafico-pastel"></canvas></div></div>
+                </div>
+                <div class="grafico-grid">
+                    <div class="grafico-container"><div class="grafico-titulo">📊 Top 10 Productos</div><div class="grafico-wrapper"><canvas id="grafico-barras"></canvas></div></div>
+                    <div class="grafico-container"><div class="grafico-titulo">💳 Métodos de Pago</div><div class="grafico-wrapper"><canvas id="grafico-dona"></canvas></div></div>
+                </div>
+                <div class="grafico-container"><div class="grafico-titulo">📈 Ingresos Acumulados</div><div class="grafico-wrapper"><canvas id="grafico-area"></canvas></div></div>
+            </div>
+
+            <!-- TAB: GASTOS -->
+            <div id="gastos" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">💸 Control de Gastos</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="Gastos.mostrarFormNuevoGasto()">➕ Registrar Gasto</button>
+                    <button class="btn-secondary" onclick="Gastos.exportarGastos()">📥 Exportar</button>
+                </div>
+                <div id="form-nuevo-gasto" class="hidden" style="margin-bottom:20px;padding:20px;border:2px solid #dc3545;border-radius:10px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:15px;color:#dc3545;">Registrar Nuevo Gasto</h3>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha *</label><input id="nuevo-gasto-fecha" type="date" required></div>
+                        <div class="form-group"><label>Categoría *</label><select id="nuevo-gasto-categoria" required><option value="">Seleccionar...</option><option>Alquiler</option><option>Servicios</option><option>Sueldos</option><option>Compras</option><option>Mantenimiento</option><option>Otros</option></select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Descripción *</label><input id="nuevo-gasto-descripcion" type="text" placeholder="Ej: Pago de luz - Febrero" required></div>
+                        <div class="form-group"><label>Monto (S/) *</label><input id="nuevo-gasto-monto" type="number" step="0.01" min="0" placeholder="0.00" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Proveedor</label><input id="nuevo-gasto-proveedor" type="text" placeholder="Nombre del proveedor"></div>
+                        <div class="form-group"><label>Comprobante</label><input id="nuevo-gasto-comprobante" type="text" placeholder="Número de boleta/factura"></div>
+                    </div>
+                    <div class="form-group"><label><input type="checkbox" id="nuevo-gasto-recurrente"> Gasto recurrente (mensual)</label></div>
+                    <div class="form-group"><label>Notas</label><textarea id="nuevo-gasto-notas" placeholder="Información adicional"></textarea></div>
+                    <div style="margin-top:15px;">
+                        <button onclick="Gastos.guardarNuevoGasto()">💾 Guardar Gasto</button>
+                        <button class="btn-secondary" onclick="Gastos.cancelarNuevoGasto()">Cancelar</button>
+                    </div>
+                </div>
+                <div class="summary-cards" id="resumen-gastos"></div>
+                <div id="lista-gastos"></div>
+            </div>
+
+            <!-- TAB: RENTABILIDAD -->
+            <div id="rentabilidad" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">💰 Análisis de Rentabilidad</h2>
+                <div class="rentabilidad-grid" id="metricas-rentabilidad"></div>
+                <div style="margin-bottom:30px;">
+                    <h3 style="margin-bottom:15px;color:#333;">⚙️ Configurar Costos de Productos</h3>
+                    <div style="display:flex;gap:10px;margin-bottom:15px;">
+                        <button onclick="Rentabilidad.mostrarFormCosto()">➕ Configurar Costo</button>
+                        <button class="btn-secondary" onclick="Rentabilidad.importarCostos()">📂 Importar Costos</button>
+                    </div>
+                    <div id="lista-costos"></div>
+                </div>
+                <div style="margin-bottom:30px;"><h3 style="margin-bottom:15px;color:#333;">🏆 Top 10 Productos Más Rentables</h3><div id="productos-rentables"></div></div>
+                <div><h3 style="margin-bottom:15px;color:#333;">⚖️ Punto de Equilibrio</h3><div id="punto-equilibrio"></div></div>
+            </div>
+
+            <!-- TAB: RESUMEN -->
+            <div id="resumen" class="tab-content">
+                <h2 style="margin-bottom:30px;color:#333;">Resumen de Ventas</h2>
+                <div class="summary-cards" id="summary-cards"></div>
+                <div style="margin-bottom:20px;height:320px;"><canvas id="metodoChart" style="width:100%;height:100%"></canvas></div>
+                <div id="stock-alerts"></div>
+                <div id="ventas-por-categoria"></div>
+            </div>
+
+            <!-- TAB: INVENTARIO -->
+            <div id="inventario" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">Inventario</h2>
+                <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                    <button onclick="Inventario.mostrarFormNuevoItem()">➕ Añadir Producto</button>
+                    <button onclick="Inventario.exportarInventarioJSON()" class="btn-secondary">💾 Exportar JSON</button>
+                    <button onclick="Inventario.exportarInventarioExcel()" class="btn-secondary">📥 Exportar Excel</button>
+                    <button onclick="document.getElementById('fileInputInventario').click()" class="btn-secondary">📂 Importar JSON</button>
+                    <input type="file" id="fileInputInventario" accept=".json" style="display:none;" onchange="Inventario.importarInventarioJSON(event)">
+                </div>
+                <div id="form-nuevo-item" class="hidden" style="margin-bottom:20px;padding:12px;border:1px solid #eee;border-radius:8px;">
+                    <div class="form-row">
+                        <div class="form-group"><label>SKU *</label><input id="nuevo-sku" type="text" placeholder="Ej: SKU-001"></div>
+                        <div class="form-group"><label>Nombre *</label><input id="nuevo-nombre" type="text" placeholder="Nombre del producto"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Stock *</label><input id="nuevo-stock" type="number" min="0" value="0"></div>
+                        <div class="form-group"><label>Umbral de reposición</label><input id="nuevo-reorder" type="number" min="0" value="5"></div>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <button onclick="Inventario.guardarNuevoItem()">Guardar Item</button>
+                        <button class="btn-secondary" onclick="Inventario.cancelarNuevoItem()">Cancelar</button>
+                    </div>
+                </div>
+                <div id="tabla-inventario"></div>
+            </div>
+
+            <!-- TAB: ÓRDENES DE SERVICIO -->
+            <div id="ordenes-servicio" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">🔧 Órdenes de Servicio</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="OrdenesServicio.mostrarFormNuevaOrden()">➕ Nueva Orden</button>
+                    <button class="btn-secondary" onclick="OrdenesServicio.exportarExcel()">📥 Excel</button>
+                    <button class="btn-secondary" onclick="OrdenesServicio.exportarPDF()">📄 PDF</button>
+                </div>
+                <div class="summary-cards" id="os-cards" style="margin-bottom:25px;"></div>
+                <div id="form-nueva-orden" class="hidden" style="margin-bottom:25px;padding:25px;border:2px solid #4472C4;border-radius:12px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:20px;color:#4472C4;" id="os-form-titulo">📋 Nueva Orden de Servicio</h3>
+                    <div style="margin-bottom:15px;padding:12px;background:#e8eefa;border-radius:8px;"><strong style="color:#4472C4;">👤 Datos del Cliente</strong></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha de Ingreso *</label><input type="date" id="os-fecha" required></div>
+                        <div class="form-group"><label>N° de Orden</label><input type="text" id="os-numero" readonly style="background:#f0f0f0;font-weight:bold;color:#4472C4;" placeholder="Auto-generado"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Nombre del Cliente *</label><input type="text" id="os-cliente" placeholder="Nombre completo" required autocomplete="off"></div>
+                        <div class="form-group"><label>Teléfono</label><input type="tel" id="os-telefono" placeholder="987654321"></div>
+                    </div>
+                    <div style="margin-bottom:15px;margin-top:10px;padding:12px;background:#e8eefa;border-radius:8px;"><strong style="color:#4472C4;">💻 Datos del Equipo</strong></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Tipo de Equipo *</label><select id="os-tipo-equipo" required><option value="">Seleccionar...</option><option>Laptop</option><option>Desktop / PC</option><option>Celular</option><option>Tablet</option><option>Impresora</option><option>Monitor</option><option>Proyector</option><option>Consola</option><option>Disco Duro / SSD</option><option>Otro</option></select></div>
+                        <div class="form-group"><label>Marca</label><input type="text" id="os-marca" placeholder="Ej: HP, Lenovo, Samsung..."></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Modelo</label><input type="text" id="os-modelo" placeholder="Ej: Pavilion 15-eg2003la"></div>
+                        <div class="form-group"><label>N° de Serie / IMEI</label><input type="text" id="os-serie" placeholder="Número de serie o IMEI"></div>
+                    </div>
+                    <div class="form-group"><label>Accesorios Entregados</label><input type="text" id="os-accesorios" placeholder="Ej: Cargador, funda, mouse..."></div>
+                    <div style="margin-bottom:15px;margin-top:10px;padding:12px;background:#e8eefa;border-radius:8px;"><strong style="color:#4472C4;">🔍 Problema y Diagnóstico</strong></div>
+                    <div class="form-group"><label>Descripción del Problema *</label><textarea id="os-problema" placeholder="Describa el problema reportado por el cliente..." required></textarea></div>
+                    <div class="form-group"><label>Diagnóstico del Técnico</label><textarea id="os-diagnostico" placeholder="Diagnóstico técnico..."></textarea></div>
+                    <div style="margin-bottom:15px;margin-top:10px;padding:12px;background:#e8eefa;border-radius:8px;"><strong style="color:#4472C4;">💳 Servicio y Pago</strong></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Técnico Responsable</label><input type="text" id="os-tecnico" placeholder="Nombre del técnico"></div>
+                        <div class="form-group"><label>Estado *</label><select id="os-estado" required><option value="Pendiente">⏳ Pendiente</option><option value="En diagnóstico">🔍 En diagnóstico</option><option value="En reparación">🔧 En reparación</option><option value="Esperando repuesto">📦 Esperando repuesto</option><option value="Listo">✅ Listo</option><option value="Entregado">🎉 Entregado</option><option value="Cancelado">❌ Cancelado</option></select></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Costo del Servicio (S/)</label><input type="number" id="os-costo" step="0.01" min="0" placeholder="0.00" oninput="OrdenesServicio.calcularSaldo()"></div>
+                        <div class="form-group"><label>Adelanto (S/)</label><input type="number" id="os-adelanto" step="0.01" min="0" placeholder="0.00" value="0" oninput="OrdenesServicio.calcularSaldo()"></div>
+                    </div>
+                    <div class="form-group">
+                        <div id="os-saldo-display" style="background:#fff3cd;padding:12px;border-radius:8px;border:2px solid #ffc107;display:none;">
+                            <strong style="color:#856404;">Saldo Pendiente: <span id="os-saldo-valor">S/0.00</span></strong>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Método de Pago</label><select id="os-metodo-pago"><option value="">Seleccionar...</option><option>Efectivo</option><option>Tarjeta</option><option>Transferencia</option><option>Yape</option><option>Plin</option><option>Otro</option></select></div>
+                        <div class="form-group"><label>Fecha Estimada de Entrega</label><input type="date" id="os-fecha-entrega"></div>
+                    </div>
+                    <div class="form-group"><label>Notas adicionales</label><input type="text" id="os-notas" placeholder="Observaciones internas..."></div>
+                    <div style="margin-bottom:15px;margin-top:10px;padding:12px;background:#e8eefa;border-radius:8px;"><strong style="color:#4472C4;">📸 Fotos del Equipo</strong></div>
+                    <div class="form-group">
+                        <label>Añadir fotos (máx. 5 imágenes)</label>
+                        <div id="os-foto-dropzone" onclick="document.getElementById('os-foto-input').click()"
+                            style="border:2px dashed #4472C4;border-radius:10px;padding:28px;text-align:center;cursor:pointer;background:#f8f9fa;"
+                            ondragover="event.preventDefault();this.style.background='#d0dcf8'" ondragleave="this.style.background='#f8f9fa'"
+                            ondrop="OrdenesServicio.manejarDrop(event)">
+                            <div style="font-size:2em;margin-bottom:8px;">📷</div>
+                            <div style="font-weight:600;color:#4472C4;">Haz clic o arrastra fotos aquí</div>
+                        </div>
+                        <input type="file" id="os-foto-input" accept="image/*" multiple style="display:none;" onchange="OrdenesServicio.agregarFotos(event)">
+                    </div>
+                    <div id="os-fotos-preview" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;"></div>
+                    <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+                        <button onclick="OrdenesServicio.guardarOrden()">💾 Guardar Orden</button>
+                        <button class="btn-secondary" onclick="OrdenesServicio.cancelarFormulario()">Cancelar</button>
+                        <input type="hidden" id="os-editando-id" value="">
+                    </div>
+                </div>
+                <div class="search-filter-container">
+                    <div class="search-box"><span class="search-icon">🔍</span><input type="text" id="os-busqueda" placeholder="Buscar por cliente, equipo, modelo, técnico o N° orden..." oninput="OrdenesServicio.aplicarFiltros()"></div>
+                    <div class="filter-row">
+                        <div class="form-group"><label>Estado</label><select id="os-filtro-estado" onchange="OrdenesServicio.aplicarFiltros()"><option value="">Todos</option><option>Pendiente</option><option>En diagnóstico</option><option>En reparación</option><option>Esperando repuesto</option><option>Listo</option><option>Entregado</option><option>Cancelado</option></select></div>
+                        <div class="form-group"><label>Tipo de Equipo</label><select id="os-filtro-tipo" onchange="OrdenesServicio.aplicarFiltros()"><option value="">Todos</option><option>Laptop</option><option>Desktop / PC</option><option>Celular</option><option>Tablet</option><option>Impresora</option><option>Monitor</option><option>Otro</option></select></div>
+                        <div class="form-group"><label>Desde</label><input type="date" id="os-filtro-desde" onchange="OrdenesServicio.aplicarFiltros()"></div>
+                        <div class="form-group"><label>Hasta</label><input type="date" id="os-filtro-hasta" onchange="OrdenesServicio.aplicarFiltros()"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;">
+                        <span class="results-counter" id="os-contador">0 órdenes</span>
+                        <button class="btn-secondary" onclick="OrdenesServicio.limpiarFiltros()">🔄 Limpiar Filtros</button>
+                    </div>
+                </div>
+                <div id="os-tabla-ordenes"></div>
+            </div>
+
+            <!-- ===== TAB: PROVEEDORES ===== -->
+            <div id="proveedores" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">🏭 Gestión de Proveedores</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="Proveedores.mostrarForm()">➕ Nuevo Proveedor</button>
+                    <button class="btn-secondary" onclick="Proveedores.exportarExcel()">📥 Exportar Excel</button>
+                </div>
+                <div id="form-nuevo-proveedor" class="hidden" style="margin-bottom:20px;padding:20px;border:2px solid #4472C4;border-radius:12px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:15px;color:#4472C4;">🏭 Registrar / Editar Proveedor</h3>
+                    <input type="hidden" id="prov-editando-id">
+                    <div class="form-row">
+                        <div class="form-group"><label>Nombre / Razón Social *</label><input id="prov-nombre" type="text" placeholder="Nombre del proveedor"></div>
+                        <div class="form-group"><label>RUC</label><input id="prov-ruc" type="text" placeholder="20123456789" maxlength="11"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Teléfono</label><input id="prov-telefono" type="tel" placeholder="987654321"></div>
+                        <div class="form-group"><label>Email</label><input id="prov-email" type="email" placeholder="proveedor@email.com"></div>
+                    </div>
+                    <div class="form-group"><label>Dirección</label><input id="prov-direccion" type="text" placeholder="Av. Ejemplo 123, Lima"></div>
+                    <div class="form-group"><label>Notas</label><textarea id="prov-notas" placeholder="Condiciones de pago, observaciones..."></textarea></div>
+                    <div style="margin-top:15px;display:flex;gap:10px;">
+                        <button onclick="Proveedores.guardarProveedor()">💾 Guardar</button>
+                        <button class="btn-secondary" onclick="Proveedores.cancelarForm()">Cancelar</button>
+                    </div>
+                </div>
+                <div class="search-box" style="margin-bottom:20px;"><span class="search-icon">🔍</span><input type="text" id="busqueda-proveedores" placeholder="Buscar por nombre o RUC..." oninput="Proveedores.actualizarLista(this.value)"></div>
+                <div id="lista-proveedores"></div>
+            </div>
+
+            <!-- ===== TAB: COMPRAS ===== -->
+            <div id="compras" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">🛒 Registro de Compras</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="Compras.mostrarForm()">➕ Nueva Compra</button>
+                    <button class="btn-secondary" onclick="Compras.exportarExcel()">📥 Exportar Excel</button>
+                </div>
+                <div class="summary-cards" id="compras-cards" style="margin-bottom:20px;"></div>
+                <div id="form-nueva-compra" class="hidden" style="margin-bottom:25px;padding:25px;border:2px solid #28a745;border-radius:12px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:20px;color:#28a745;">🛒 Registrar Compra / Ingreso de Mercadería</h3>
+                    <input type="hidden" id="compra-editando-id">
+                    <div class="form-row">
+                        <div class="form-group"><label>Proveedor</label><select id="compra-proveedor"><option value="">Sin proveedor</option></select></div>
+                        <div class="form-group"><label>Fecha *</label><input type="date" id="compra-fecha"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>N° Documento</label><input id="compra-nro-doc" type="text" placeholder="F001-00123"></div>
+                        <div class="form-group"><label>Total Calculado</label><input id="compra-total-display" readonly style="background:#f0f0f0;font-weight:bold;font-size:1.1em;color:#28a745;"></div>
+                    </div>
+                    <div style="margin-bottom:15px;padding:15px;background:#e8f5e9;border-radius:8px;border:1px solid #c8e6c9;">
+                        <strong style="color:#28a745;display:block;margin-bottom:12px;">➕ Agregar Producto</strong>
+                        <div class="compra-item-form">
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">SKU</label><input id="ci-sku" type="text" placeholder="SKU-001" style="text-transform:uppercase;"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Nombre *</label><input id="ci-nombre" type="text" placeholder="Nombre del producto"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Cantidad *</label><input id="ci-cantidad" type="number" min="1" value="1"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Costo Unit. *</label><input id="ci-costo" type="number" step="0.01" min="0" placeholder="0.00"></div>
+                            <button onclick="Compras.agregarItem()" style="background:#28a745;padding:10px 16px;height:44px;align-self:end;">➕</button>
+                        </div>
+                    </div>
+                    <div id="compra-items-lista" style="margin-bottom:15px;"></div>
+                    <div class="form-group"><label>Notas</label><input id="compra-notas" type="text" placeholder="Observaciones..."></div>
+                    <div style="margin-top:15px;display:flex;gap:10px;">
+                        <button onclick="Compras.guardarCompra()" style="background:linear-gradient(135deg,#28a745,#20c997);">💾 Registrar Compra</button>
+                        <button class="btn-secondary" onclick="Compras.cancelarForm()">Cancelar</button>
+                    </div>
+                    <p style="margin-top:10px;font-size:0.82em;color:#28a745;"><strong>ℹ️</strong> Al guardar, se actualizará automáticamente el inventario y los costos en Rentabilidad.</p>
+                </div>
+                <div class="search-box" style="margin-bottom:20px;"><span class="search-icon">🔍</span><input type="text" id="busqueda-compras" placeholder="Buscar por proveedor, producto o N° documento..." oninput="Compras.actualizarTabla(this.value)"></div>
+                <div id="tabla-compras"></div>
+            </div>
+
+            <!-- ===== TAB: DEVOLUCIONES ===== -->
+            <div id="devoluciones" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">↩️ Devoluciones</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="Devoluciones.iniciarDevolucion()" style="background:linear-gradient(135deg,#dc3545,#c82333);">↩️ Registrar Devolución</button>
+                    <button class="btn-secondary" onclick="Devoluciones.exportarExcel()">📥 Exportar Excel</button>
+                </div>
+                <div class="summary-cards" id="dev-cards" style="margin-bottom:20px;"></div>
+                <div id="tabla-devoluciones"></div>
+            </div>
+
+            <!-- ===== TAB: COTIZACIONES ===== -->
+            <div id="cotizaciones" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">📄 Cotizaciones</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;"><button onclick="Cotizaciones.mostrarForm()">➕ Nueva Cotización</button></div>
+                <div class="summary-cards" id="cot-cards" style="margin-bottom:20px;"></div>
+                <div id="form-nueva-cotizacion" class="hidden" style="margin-bottom:25px;padding:25px;border:2px solid #4472C4;border-radius:12px;background:#f8f9fa;">
+                    <h3 style="margin-bottom:20px;color:#4472C4;">📄 Nueva Cotización</h3>
+                    <input type="hidden" id="cot-editando-id">
+                    <div class="form-row">
+                        <div class="form-group"><label>N° Cotización</label><input id="cot-numero" type="text" readonly style="background:#f0f0f0;font-weight:bold;color:#4472C4;"></div>
+                        <div class="form-group"><label>Fecha *</label><input type="date" id="cot-fecha"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Válida hasta</label><input type="date" id="cot-vencimiento"></div>
+                        <div class="form-group"><label>Cliente *</label><input id="cot-cliente" type="text" placeholder="Nombre del cliente"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Teléfono</label><input id="cot-tel" type="tel" placeholder="987654321"></div>
+                        <div class="form-group"><label>Email</label><input id="cot-email" type="email" placeholder="cliente@email.com"></div>
+                    </div>
+                    <div style="margin-bottom:15px;padding:15px;background:#e8eefa;border-radius:8px;border:1px solid #c5d3f5;">
+                        <strong style="color:#4472C4;display:block;margin-bottom:12px;">➕ Agregar Producto/Servicio</strong>
+                        <div class="compra-item-form" style="grid-template-columns:1fr 70px 90px 70px auto;">
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Descripción *</label><input id="cot-item-nombre" type="text" placeholder="Producto o servicio"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Cant.</label><input id="cot-item-cant" type="number" min="1" value="1"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Precio (S/)</label><input id="cot-item-precio" type="number" step="0.01" min="0" placeholder="0.00"></div>
+                            <div class="form-group" style="margin:0;"><label style="font-size:0.85em;">Desc. %</label><input id="cot-item-desc" type="number" min="0" max="100" value="0" placeholder="0"></div>
+                            <button onclick="Cotizaciones.agregarItem()" style="padding:10px 16px;height:44px;align-self:end;">➕</button>
+                        </div>
+                    </div>
+                    <div id="cot-items-lista" style="margin-bottom:15px;min-height:50px;"></div>
+                    <div class="cot-totales">
+                        <div><span>Subtotal:</span><strong id="cot-subtotal-display">S/0.00</strong></div>
+                        <div><span>IGV (18%):</span><strong id="cot-igv-display">No incluido</strong></div>
+                        <div class="total-final"><span>TOTAL:</span><strong id="cot-total-display">S/0.00</strong></div>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;"><label><input type="checkbox" id="cot-incluir-igv" onchange="Cotizaciones.renderItems()"> Incluir IGV (18%) en el total</label></div>
+                    <div class="form-row" style="margin-top:12px;">
+                        <div class="form-group"><label>Condiciones de pago</label><input id="cot-condiciones" type="text" placeholder="Ej: 50% al aceptar, saldo a la entrega"></div>
+                        <div class="form-group"><label>Notas internas</label><input id="cot-notas-cot" type="text" placeholder="Observaciones..."></div>
+                    </div>
+                    <div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap;">
+                        <button onclick="Cotizaciones.guardarCotizacion()">💾 Guardar Cotización</button>
+                        <button class="btn-secondary" onclick="Cotizaciones.cancelarForm()">Cancelar</button>
+                    </div>
+                </div>
+                <div id="tabla-cotizaciones"></div>
+            </div>
+
+            <!-- ===== TAB: CIERRE DE CAJA ===== -->
+            <div id="cierre-caja" class="tab-content">
+                <h2 style="margin-bottom:20px;color:#333;">🏧 Cierre de Caja</h2>
+                <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+                    <button onclick="CierreCaja.realizarCierre()" style="background:linear-gradient(135deg,#28a745,#20c997);">🏧 Realizar Cierre del Día</button>
+                    <button class="btn-secondary" onclick="CierreCaja.exportarExcel()">📥 Exportar Excel</button>
+                </div>
+                <div class="summary-cards" id="caja-cards" style="margin-bottom:25px;"></div>
+                <h3 style="margin-bottom:15px;color:#333;">📋 Historial de Cierres</h3>
+                <div id="tabla-cierres"></div>
+            </div>
+
+            <!-- ===== TAB: GESTIÓN DE USUARIOS ===== -->
+            <div id="usuarios" class="tab-content">
+                <h2 style="margin-bottom:5px;color:#333;">👨‍💼 Gestión de Usuarios</h2>
+                <p style="color:#666;margin-bottom:20px;font-size:0.9em;">Aprueba o rechaza accesos al sistema.</p>
+                <div class="summary-cards" id="usuarios-cards"></div>
+                <div style="margin-bottom:30px;"><h3 style="color:#fd7e14;margin-bottom:15px;">⏳ Pendientes de Aprobación</h3><div id="usuarios-pendientes-lista"><p style="text-align:center;color:#666;padding:20px;">Cargando...</p></div></div>
+                <div style="margin-bottom:30px;"><h3 style="color:#28a745;margin-bottom:15px;">✅ Usuarios Aprobados</h3><div id="usuarios-aprobados-lista"><p style="text-align:center;color:#666;padding:20px;">Cargando...</p></div></div>
+                <div><h3 style="color:#dc3545;margin-bottom:15px;">🚫 Usuarios Rechazados</h3><div id="usuarios-rechazados-lista"><p style="text-align:center;color:#666;padding:20px;">Cargando...</p></div></div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="os-lightbox" onclick="if(event.target===this)OrdenesServicio.cerrarLightbox()">
+        <button id="os-lightbox-close" onclick="OrdenesServicio.cerrarLightbox()">✕</button>
+        <img id="os-lightbox-img" src="" alt="Foto del equipo">
+        <div id="os-lightbox-nav"><button onclick="OrdenesServicio.navLightbox(-1)">‹ Anterior</button><button onclick="OrdenesServicio.navLightbox(1)">Siguiente ›</button></div>
+        <div id="os-lightbox-counter"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
